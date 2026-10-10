@@ -17,9 +17,9 @@ python3 -c "import sys; assert sys.version_info >= (3, 10), 'Python version must
 echo "[PASS] Python version satisfies the minimum supported version."
 
 echo "[2/4] Python dependencies"
-python3 -c "import playwright; print(f'  ✓ Playwright version: {playwright.__version__}')"
-python3 -c "import behave; print(f'  ✓ Behave version: {behave.__version__}')"
-python3 -c "import pydantic; print(f'  ✓ Pydantic version: {pydantic.__version__}')"
+python3 -c "from importlib.metadata import version; print(f'  ✓ Playwright version: {version(\"playwright\")}')"
+python3 -c "from importlib.metadata import version; print(f'  ✓ Behave version: {version(\"behave\")}')"
+python3 -c "from importlib.metadata import version; print(f'  ✓ Pydantic version: {version(\"pydantic\")}')"
 python3 -c "import pydantic_settings; print('  ✓ pydantic-settings: loaded')"
 python3 -c "import behave_html_pretty_formatter; print('  ✓ behave-html-pretty-formatter: loaded')"
 
