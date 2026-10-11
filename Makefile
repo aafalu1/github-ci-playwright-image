@@ -2,7 +2,7 @@
 # Makefile: Local testing & development commands for Playwright Docker Image
 # ==============================================================================
 
-IMAGE_NAME ?= gitlab-playwright-image
+IMAGE_NAME ?= github-playwright-image
 TAG ?= local-py3.11
 PYTHON_VERSION ?= 3.11
 

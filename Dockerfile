@@ -1,5 +1,5 @@
 # ==============================================================================
-# GitLab CI Runner Image: Playwright Python POM Automation Framework
+# GitHub Actions Runner Image: Playwright Python POM Automation Framework
 # Built on Microsoft Official Base: Pre-bakes Chromium to eliminate CDN download timeouts
 # ==============================================================================
 
@@ -26,7 +26,7 @@ RUN python -m pip install --upgrade pip && \
     pip install --upgrade -r /tmp/requirements.txt && \
     rm -f /tmp/requirements.txt
 
-# Ensure workspace, reports, and browser caches have full permissions for GitLab runner
+# Ensure workspace, reports, and browser caches have full permissions for GitHub Actions runner
 RUN mkdir -p /workspace /reports && \
     chmod 1777 /workspace /reports && \
     chmod -R 777 /ms-playwright

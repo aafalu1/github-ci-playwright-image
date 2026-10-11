@@ -1,135 +1,118 @@
-# Python + Playwright Chromium Container Image
+# Playwright Python Chromium Docker Image (GitHub Actions & GHCR)
 
-This project builds one reusable Linux container image containing Python, the
-project's Python test dependencies, and the Playwright **Chromium** browser.
-Firefox and WebKit are intentionally not installed. The same `Dockerfile` can
-be published to the GitLab Container Registry, GitHub Container Registry
-(GHCR), or both.
+A dedicated, lightweight container image optimized for running **Playwright Python** and **Behave BDD** test suites inside **GitHub Actions**.
 
-## Image contents
-
-- Python 3.11 on Debian Bookworm (`PYTHON_VERSION` can be overridden at build
-  time).
-- Dependencies from [`requirements.txt`](requirements.txt), including the
-  pinned Playwright Python package.
-- The matching Playwright Chromium binary and its required Linux packages.
-- Verification scripts in `/usr/local/bin/scripts/`.
-- Writable `/workspace` and `/reports` directories for CI jobs.
-
-Docker is **not** installed in the resulting test image. Docker is only used by
-the image-building pipeline (and is optional for local builds); jobs that
-consume the published image do not need Docker-in-Docker.
-
-The Python Playwright package version in `requirements.txt` must stay aligned
-with the Playwright browser installed during the image build. Do not update one
-without updating and verifying the other.
-
-## Build and verify locally
-
-Local image-build requirement: Docker with BuildKit/buildx enabled. This is not
-a requirement for CI jobs that use the already-published image.
-
-```bash
-make build
-make test
-```
-
-Equivalent Docker commands:
-
-```bash
-docker build -t playwright-python:local .
-docker run --rm playwright-python:local /usr/local/bin/scripts/verify_image.sh
-```
-
-The verification script prints the Python and dependency versions, then
-launches Chromium and runs a small DOM/JavaScript check. It fails with a
-non-zero exit code if a required dependency or browser check fails.
-
-## Publish to GitLab Container Registry
-
-1. Push this project to GitLab and enable **Settings → General → Visibility,
-   project features, permissions → Container Registry**.
-2. Ensure the runner supports Docker-in-Docker and privileged execution as
-   required by your GitLab runner configuration.
-3. The included [`.gitlab-ci.yml`](.gitlab-ci.yml) logs into the built-in
-   registry using GitLab CI variables, builds and tags the image, verifies it,
-   and publishes branch/SHA tags. The default branch also publishes `latest`
-   and `py3.11-pw1.40.0`; tagged releases publish the corresponding Git tag.
-
-Use the published image from a GitLab pipeline:
-
-```yaml
-default:
-  image: registry.gitlab.com/<namespace>/<image-project>:latest
-
-test:
-  script:
-    - python --version
-    - playwright --version
-    - behave
-```
-
-If the consumer project is private or in another GitLab project, configure
-Container Registry token access so its CI job can pull this image. See GitLab's
-[CI job token documentation](https://docs.gitlab.com/ci/jobs/ci_job_token/).
-
-## Publish to GitHub Container Registry
-
-The [`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml)
-workflow builds this same Dockerfile, runs the Chromium verification, and then
-pushes the image to GHCR. Enable Actions for the repository and allow the
-workflow's `GITHUB_TOKEN` to write packages (the workflow requests
-`packages: write` permission).
-
-It publishes branch and commit-SHA tags on pushes, `latest` on the default
-branch, and version tags for Git tags such as `v1.2.3`. Pull requests build and
-verify the image but do not publish it. The resulting image address is:
-
+The image is automatically built, verified, and published directly to **GitHub Container Registry (GHCR)**:
 ```text
 ghcr.io/<owner>/<repository>:latest
 ```
 
-### Use the GHCR image in a GitHub Actions job
+> [!NOTE]
+> **Zero Local Docker Required**: You do not need Docker installed on your computer. GitHub Actions builds, tests, and publishes this container entirely in the cloud on every push.
 
-For a public GHCR package:
+---
+
+## 📦 Image Contents
+
+- **Base System**: Ubuntu Jammy (from `mcr.microsoft.com/playwright/python:v1.40.0-jammy`)
+- **Python**: Python 3.11 with `pip` pre-upgraded
+- **Pre-installed Test Dependencies** (from [`requirements.txt`](requirements.txt)):
+  - `playwright` (`>=1.40.0,<1.41.0`)
+  - `behave` (`~=1.3.3`), `parse`, `parse-type`
+  - `pydantic` (`~=2.10`), `pydantic-settings` (`~=2.7`)
+  - `behave-html-pretty-formatter` (`~=1.16`)
+  - `requests`, `PyYAML`
+- **Pre-baked Browser**: Chromium browser binary pre-cached in `/ms-playwright` (eliminates CDN download timeouts during CI runs)
+- **Filesystem Permissions**: Full write permissions on `/workspace` and `/reports` for seamless artifact generation
+- **Image Verification Tools**: Embedded diagnostic scripts in `/usr/local/bin/scripts/`
+
+---
+
+## 🚀 Cloud Build & Publish Workflow
+
+Image publishing is handled automatically by [`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml):
+
+```mermaid
+flowchart LR
+    Push["git push to GitHub"] --> Build["Docker Buildx\n(Python 3.11 + Chromium)"]
+    Build --> Verify["In-Container Verification\n(verify_image.sh & smoke_test.py)"]
+    Verify --> Auth["Authenticate with GHCR\n(GITHUB_TOKEN)"]
+    Auth --> Publish["Publish Tags to GHCR\n(latest, branch, sha)"]
+```
+
+### Published Tags
+| Tag Format | Condition | Example |
+| :--- | :--- | :--- |
+| `latest` | Push to default branch (`main`) | `ghcr.io/aafalu1/github-ci-playwright-image:latest` |
+| `sha-<hash>` | Any push | `ghcr.io/aafalu1/github-ci-playwright-image:sha-4b82d3e` |
+| `<branch-name>`| Push to specific branch | `ghcr.io/aafalu1/github-ci-playwright-image:feature-update` |
+| `v*` | Git release tag | `ghcr.io/aafalu1/github-ci-playwright-image:v1.0.0` |
+
+---
+
+## 🛠 How to Use This Image in Your Test Project
+
+In your test automation repository (e.g. `playwright_framework`), configure your GitHub Actions workflow at `.github/workflows/test.yml`:
 
 ```yaml
+name: End-to-End Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
     container:
+      # Use this pre-baked image directly from GHCR
       image: ghcr.io/<owner>/<repository>:latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python --version && playwright --version
-      - run: behave
+      - name: Check out test project
+        uses: actions/checkout@v4
+
+      - name: Validate steps (Dry-Run)
+        run: behave --dry-run -f pretty
+
+      - name: Execute Tests
+        env:
+          APP_ENV: "ci"
+          APP_HEADLESS: "true"
+          APP_VIEWPORT_WIDTH: "1920"
+          APP_VIEWPORT_HEIGHT: "1080"
+        run: behave --tags=@smoke -f html-pretty -o reports/report.html -f pretty
+
+      - name: Upload HTML Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-html-report
+          path: reports/
+          retention-days: 14
 ```
 
-For a private package, provide credentials in the `container` configuration
-using a package-read token stored as a GitHub Actions secret:
+> [!IMPORTANT]
+> **Package Visibility Settings:**
+> Newly published images on GitHub Packages default to private. To allow public workflows or other repos to pull without token configuration:
+> 1. Go to your GitHub profile -> **Packages** tab.
+> 2. Click on the published container image.
+> 3. Click **Package settings** (right sidebar) -> Scroll down to **Danger Zone**.
+> 4. Click **Change visibility** and select **Public**.
 
-```yaml
-    container:
-      image: ghcr.io/<owner>/<repository>:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_READ_TOKEN }}
-```
+---
 
-Using a container image in a GitHub Actions job does not require creating a
-separate GitHub Action. A custom JavaScript or Docker-based Action is a
-different product interface; build one only if reusable action inputs/outputs
-are needed.
+## 💻 Optional: Local Build & Testing
 
-## Local use with a test project
+If you have Docker installed on your development machine and wish to build or test changes locally:
 
 ```bash
-docker run --rm \
-  -v "$PWD/../your-tests:/workspace" \
-  -w /workspace \
-  playwright-python:local \
-  behave --tags=@smoke
-```
+# Build the image locally
+make build
 
-The image's default command prints the Python, Playwright, and Behave versions.
-When using it as a CI job image, the runner supplies the test command instead.
+# Run in-container verification tests (Chromium launch check)
+make test
+
+# Start an interactive shell inside the container
+make shell
+```
